@@ -68,8 +68,11 @@ class InteriorPoint:
                 step = np.linalg.solve(KKT, rhs)[:n]
             except np.linalg.LinAlgError:
                 return False
+
+            # Lambda Condition
             if 0.5 * step @ hessian @ step < INNER_EPSILON:
                 return True
+
             fx_barrier = barrier.value(self.current_x)
             alpha = self.backtracking(
                 self.current_x,
@@ -79,8 +82,8 @@ class InteriorPoint:
                 get_func_value=barrier.value,
             )
             while any(
-                c.value(self.current_x + alpha * step) >= 0
-                for c in self.ineq_constraints
+                constraint.value(self.current_x + alpha * step) >= 0
+                for constraint in self.ineq_constraints
             ):
                 alpha *= RHO
             self.current_x += alpha * step
