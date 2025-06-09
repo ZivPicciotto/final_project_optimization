@@ -26,7 +26,7 @@ class TestConstrainedMin(unittest.TestCase):
         success = solver.minimize()
 
         # Convert to numpy array
-        path = np.array(solver.outer_history)
+        path = np.array(solver.outer_loop_history)
 
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection="3d")
@@ -128,7 +128,7 @@ class TestConstrainedMin(unittest.TestCase):
         success = solver.minimize()
 
         # Convert to numpy array
-        path = np.array(solver.outer_history)
+        path = np.array(solver.outer_loop_history)
 
         # Plot central path (2D)
         plt.figure(figsize=(8, 6))
@@ -156,8 +156,9 @@ class TestConstrainedMin(unittest.TestCase):
         plt.close()
 
         # Plot objective history
+        obj_history = [-p for p in solver.obj_history]
         plt.figure(figsize=(8, 5))
-        plt.plot(solver.obj_history, "b-o", markersize=4)
+        plt.plot(obj_history, "b-o", markersize=4)
         plt.title("LP Objective Value vs Outer Iteration")
         plt.xlabel("Outer Iteration")
         plt.ylabel("Objective Value")

@@ -28,8 +28,8 @@ class InteriorPoint:
         self.t = T0
         self.current_x = x0
         self.current_fx = self.f.value(self.current_x)
-        self.outer_history = []
-        self.obj_history = []
+        self.outer_loop_history = [self.current_x.copy()]
+        self.obj_history = [self.current_fx.copy()]
 
     def backtracking(
         self,
@@ -94,7 +94,7 @@ class InteriorPoint:
         for _ in range(OUTER_MAX_ITER):
             if not self.newton_unconstrained():
                 break
-            self.outer_history.append(self.current_x.copy())
+            self.outer_loop_history.append(self.current_x.copy())
             self.obj_history.append(self.f.value(self.current_x))
             if m / self.t < OUTER_EPSILON:
                 return True
