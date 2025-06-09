@@ -69,7 +69,6 @@ class InteriorPoint:
             except np.linalg.LinAlgError:
                 return False
 
-            # Lambda Condition
             if 0.5 * step @ hessian @ step < INNER_EPSILON:
                 return True
 
@@ -81,11 +80,7 @@ class InteriorPoint:
                 gradient,
                 get_func_value=barrier.value,
             )
-            while any(
-                constraint.value(self.current_x + alpha * step) >= 0
-                for constraint in self.ineq_constraints
-            ):
-                alpha *= RHO
+
             self.current_x += alpha * step
         return False
 

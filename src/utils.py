@@ -13,14 +13,14 @@ class BarrierFunction(MathFunction):
         return self.t * self.func.value(x) + penalty
 
     def gradient(self, x):
-        func_grad = self.func.gradient(x)
+        grad = self.func.gradient(x)
         penalty_grad = sum(
             (1.0 / (-c.value(x))) * c.gradient(x) for c in self.ineq_constraints
         )
-        return self.t * func_grad + penalty_grad
+        return self.t * grad + penalty_grad
 
     def hessian(self, x):
-        func_hess = self.func.hessian(x)
+        hessian = self.func.hessian(x)
         penalty_hess = np.zeros((x.size, x.size))
 
         for c in self.ineq_constraints:
@@ -31,4 +31,4 @@ class BarrierFunction(MathFunction):
                 outer_product / (constraint_val**2) - c.hessian(x) / constraint_val
             )
 
-        return self.t * func_hess + penalty_hess
+        return self.t * hessian + penalty_hess
