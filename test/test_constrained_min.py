@@ -413,7 +413,7 @@ class TestConstrainedMin(unittest.TestCase):
 
     def plot_comprehensive_comparison(self, results, costs, capacities, demands):
         """Create comprehensive comparison plots"""
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig, axes = plt.subplots(1, 3, figsize=(18, 12))
         fig.suptitle('Comprehensive Method Comparison',
                      fontsize=16, fontweight='bold')
 
@@ -421,22 +421,8 @@ class TestConstrainedMin(unittest.TestCase):
         methods = list(successful_results.keys())
         colors = ['blue', 'green', 'red', 'orange', 'purple']
 
-        # 1. Cost Comparison
-        ax = axes[0, 0]
-        costs_list = [successful_results[m]['cost'] for m in methods]
-        bars = ax.bar(methods, costs_list, color=colors[:len(methods)])
-        ax.set_title('Total Cost Comparison')
-        ax.set_ylabel('Cost ($)')
-        ax.tick_params(axis='x', rotation=45)
-
-        # Add value labels on bars
-        for bar, cost in zip(bars, costs_list):
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{cost:.2f}', ha='center', va='bottom')
-
-        # 2. Time Comparison
-        ax = axes[0, 1]
+        # 1. Time Comparison
+        ax = axes[0]
         times_list = [successful_results[m]['time'] for m in methods]
         bars = ax.bar(methods, times_list, color=colors[:len(methods)])
         ax.set_title('Computation Time Comparison')
@@ -450,24 +436,8 @@ class TestConstrainedMin(unittest.TestCase):
             ax.text(bar.get_x() + bar.get_width()/2., height,
                     f'{time_val:.4f}', ha='center', va='bottom')
 
-        # 3. Solution Heatmap (if multiple methods)
-        if len(methods) >= 2:
-            ax = axes[0, 2]
-            # Compare first two methods
-            diff = successful_results[methods[0]]['solution'] - \
-                successful_results[methods[1]]['solution']
-            im = ax.imshow(diff, cmap='coolwarm', interpolation='nearest')
-            ax.set_title(f'Solution Difference\n{methods[0]} - {methods[1]}')
-            ax.set_xlabel('Retail Outlet')
-            ax.set_ylabel('Factory')
-            ax.set_xticks(np.arange(12))
-            ax.set_xticklabels(np.arange(12)+1)
-            ax.set_yticks([0, 1])
-            ax.set_yticklabels(['Factory 1', 'Factory 2'])
-            plt.colorbar(im, ax=ax, label='Difference')
-
-        # 4. Factory Utilization Comparison
-        ax = axes[1, 0]
+        # 2. Factory Utilization Comparison
+        ax = axes[1]
         width = 0.8 / len(methods)
         x = np.arange(2)  # Two factories
 
@@ -486,25 +456,8 @@ class TestConstrainedMin(unittest.TestCase):
         ax.set_xticklabels(['Factory 1', 'Factory 2'])
         ax.legend()
 
-        # 5. Solution Values Scatter Plot
-        ax = axes[1, 1]
-        if len(methods) >= 2:
-            sol1 = successful_results[methods[0]]['solution'].flatten()
-            sol2 = successful_results[methods[1]]['solution'].flatten()
-            ax.scatter(sol1, sol2, alpha=0.6, color='blue')
-
-            # Add diagonal line for perfect correlation
-            min_val, max_val = min(np.min(sol1), np.min(
-                sol2)), max(np.max(sol1), np.max(sol2))
-            ax.plot([min_val, max_val], [min_val, max_val], 'r--', alpha=0.8)
-
-            ax.set_xlabel(f'{methods[0]} Solution')
-            ax.set_ylabel(f'{methods[1]} Solution')
-            ax.set_title('Solution Values Correlation')
-            ax.grid(True, alpha=0.3)
-
-        # 6. Method Characteristics Summary
-        ax = axes[1, 2]
+        # 3. Method Characteristics Summary
+        ax = axes[2]
         ax.axis('off')
 
         summary_text = "METHOD CHARACTERISTICS\n" + "="*25 + "\n\n"
