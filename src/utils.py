@@ -13,7 +13,7 @@ class BarrierFunction(MathFunction):
     def value(self, x):
         constraint_vals = [-c.value(x) for c in self.ineq_constraints]
         min_val = min(constraint_vals)
-        if min_val <= 1e-10:  # Too close to boundary
+        if min_val <= 1e-10:
             return np.inf
         penalty = sum(-np.log(val) for val in constraint_vals)
         return self.t * self.func.value(x) + penalty

@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import linprog
 from src.constrained_min import InteriorPoint
 from examples import LPConstraint, TransportationObjective
 from src.utils import plot_cost_breakdown, plot_flow_network, plot_utilization
@@ -145,10 +146,12 @@ class TestConstrainedMin(unittest.TestCase):
         plot_utilization(solver.current_x, a)
         plot_cost_breakdown(solver.current_x, costs)
 
-    def test_compare_methods(self):
-        print("\nRunning method comparison test with matched formulations...")
-        
-        # Problem setup - same for both methods
+    def test_compare_all_methods(self):
+        print("\n" + "="*60)
+        print("COMPREHENSIVE METHOD COMPARISON")
+        print("="*60)
+
+        # Problem setup - same for all methods
         n_factories = 2
         n_outlets = 12
         capacities = [100, 200]  # Factory capacities
@@ -156,272 +159,439 @@ class TestConstrainedMin(unittest.TestCase):
         costs = np.ones((n_factories, n_outlets))
         costs[1, :] = 2  # Factory 2 has higher shipping costs
 
+        results = {}
+
         # ============================================
-        # Revised Interior Point Formulation (matches max-flow)
+        # Method 1: Interior Point
         # ============================================
-        print("\nSolving with revised Interior Point method...")
-        
+        print("\n1. Solving with Interior Point method...")
+        ip_start = time()
+        ip_solution, ip_cost = self.solve_with_interior_point(
+            costs, capacities, demands)
+        ip_time = time() - ip_start
+        results['Interior Point'] = {
+            'solution': ip_solution,
+            'cost': ip_cost,
+            'time': ip_time,
+            'success': True  # Assume success if no exception
+        }
+
+        # ============================================
+        # Method 2: NetworkX Min-Cost Max Flow
+        # ============================================
+        print("\n2. Solving with NetworkX Min-Cost Max Flow...")
+        mf_start = time()
+        mf_solution, mf_cost, _ = solve_with_maxflow_balanced(
+            costs, capacities, demands)
+        mf_time = time() - mf_start
+        results['NetworkX Min-Cost Flow'] = {
+            'solution': mf_solution,
+            'cost': mf_cost,
+            'time': mf_time,
+            'success': True
+        }
+
+        # ============================================
+        # Method 3: SciPy Linear Programming
+        # ============================================
+        print("\n3. Solving with SciPy Linear Programming...")
+        scipy_start = time()
+        scipy_solution, scipy_cost, scipy_success = self.solve_with_scipy_linprog(
+            costs, capacities, demands)
+        scipy_time = time() - scipy_start
+        results['SciPy LinProg'] = {
+            'solution': scipy_solution,
+            'cost': scipy_cost,
+            'time': scipy_time,
+            'success': scipy_success
+        }
+
+        # ============================================
+        # Comprehensive Comparison
+        # ============================================
+        self.compare_all_results(results, costs, capacities, demands)
+
+    def solve_with_interior_point(self, costs, capacities, demands):
+        """Solve using your Interior Point implementation"""
+        n_factories, n_outlets = costs.shape
         total_vars = n_factories * n_outlets
+
         obj = TransportationObjective(costs)
-        
+
         # Inequality constraints (just capacity and non-negativity)
         constraints = []
-        
+
         # Capacity constraints (≤)
         for i in range(n_factories):
             coeffs = np.zeros(total_vars)
             coeffs[i*n_outlets:(i+1)*n_outlets] = 1
-            constraints.append(LPConstraint(coeffs, -capacities[i]))  # Σx_ij ≤ capacity_i
-        
+            constraints.append(LPConstraint(coeffs, -capacities[i]))
+
         # Non-negativity constraints (≥ 0)
         for k in range(total_vars):
             coeffs = np.zeros(total_vars)
             coeffs[k] = -1
-            constraints.append(LPConstraint(coeffs, 0))  # x_k ≥ 0
+            constraints.append(LPConstraint(coeffs, 0))
 
-        # Equality constraints for demand satisfaction (=)
+        # Equality constraints for demand satisfaction
         eq_constraints = []
         for j in range(n_outlets):
             coeffs = np.zeros(total_vars)
             coeffs[j] = 1  # From factory 1
             coeffs[j + n_outlets] = 1  # From factory 2
             eq_constraints.append(coeffs)
-        
+
         eq_mat = np.array(eq_constraints)
         eq_rhs = np.array(demands)
 
-        # Initial feasible point (must satisfy Ax = b)
-        x0 = np.array([
-            # Factory 1 ships exactly half of each demand
-            *[5.0]*6, *[10.0]*6,
-            # Factory 2 ships the other half
-            *[5.0]*6, *[10.0]*6
-        ])
+        # Initial feasible point
+        x0 = np.array([*[5.0]*6, *[10.0]*6, *[5.0]*6, *[10.0]*6])
 
-        # Verify initial point satisfies equality constraints
-        assert np.allclose(eq_mat @ x0, eq_rhs), "Initial point doesn't satisfy demand constraints"
-        
         # Solve
-        ip_start = time()
         solver = InteriorPoint(obj, constraints, eq_mat, eq_rhs, x0)
-        success = solver.minimize()
-        ip_time = time() - ip_start
-        
-        ip_solution = solver.current_x.reshape((n_factories, n_outlets))
-        ip_cost = obj.value(solver.current_x)
+        solver.minimize()
 
-        # ============================================
-        # Max-Flow Formulation
-        # ============================================
-        print("\nSolving with Max-Flow method...")
-        mf_start = time()
-        mf_solution, mf_cost, _ = solve_with_maxflow_balanced(costs, capacities, demands)
-        mf_time = time() - mf_start
+        solution = solver.current_x.reshape((n_factories, n_outlets))
+        cost = obj.value(solver.current_x)
 
-        # ============================================
-        # Comparison
-        # ============================================
-        print("\nComparison Results:")
-        print(f"{'Metric':<20} {'Interior Point':<15} {'Max-Flow':<15}")
-        print(f"{'Total Cost':<20} {ip_cost:<15.2f} {mf_cost:<15.2f}")
-        print(f"{'Solve Time (s)':<20} {ip_time:<15.4f} {mf_time:<15.4f}")
-        
-        # Solution difference
-        diff = ip_solution - mf_solution
-        max_diff = np.max(np.abs(diff))
-        print(f"\nMaximum solution difference: {max_diff:.4f}")
+        return solution, cost
 
-        # Plot comparison
-        self.plot_comparison(ip_solution, mf_solution, ip_cost, mf_cost, ip_time, mf_time)
+    def solve_with_scipy_linprog(self, costs, capacities, demands):
+        """Solve using SciPy's linear programming solver"""
+        n_factories, n_outlets = costs.shape
+        total_vars = n_factories * n_outlets
 
-    def plot_comparison(self, ip_solution, mf_solution, ip_cost, mf_cost, ip_time, mf_time):
-        """Plot comparison between the two methods"""
-        plt.figure(figsize=(15, 10))
-        
-        # Cost and Time comparison
-        plt.subplot(2, 2, 1)
-        bars = plt.bar(['Interior Point', 'Max-Flow'], [ip_cost, mf_cost], color=['blue', 'green'])
-        plt.title('Total Cost Comparison')
-        plt.ylabel('Cost ($)')
-        for bar in bars:
+        # Objective: minimize cost (linprog minimizes c^T x)
+        c = costs.flatten()
+
+        # Inequality constraints: A_ub @ x <= b_ub
+        A_ub = []
+        b_ub = []
+
+        # Capacity constraints: sum of shipments from each factory <= capacity
+        for i in range(n_factories):
+            constraint_row = np.zeros(total_vars)
+            constraint_row[i*n_outlets:(i+1)*n_outlets] = 1
+            A_ub.append(constraint_row)
+            b_ub.append(capacities[i])
+
+        A_ub = np.array(A_ub)
+        b_ub = np.array(b_ub)
+
+        # Equality constraints: A_eq @ x = b_eq
+        # Demand constraints: sum of shipments to each outlet = demand
+        A_eq = []
+        b_eq = []
+
+        for j in range(n_outlets):
+            constraint_row = np.zeros(total_vars)
+            constraint_row[j] = 1  # From factory 1
+            constraint_row[j + n_outlets] = 1  # From factory 2
+            A_eq.append(constraint_row)
+            b_eq.append(demands[j])
+
+        A_eq = np.array(A_eq)
+        b_eq = np.array(b_eq)
+
+        # Bounds: all variables >= 0 (default in linprog)
+        bounds = [(0, None) for _ in range(total_vars)]
+
+        # Solve using different methods for robustness
+        methods = ['highs', 'highs-ds', 'highs-ipm']
+
+        for method in methods:
+            try:
+                print(f"   Trying SciPy method: {method}")
+                result = linprog(
+                    c=c,
+                    A_ub=A_ub,
+                    b_ub=b_ub,
+                    A_eq=A_eq,
+                    b_eq=b_eq,
+                    bounds=bounds,
+                    method=method,
+                    options={'disp': False, 'presolve': True}
+                )
+
+                if result.success:
+                    print(f"   ✓ Success with method: {method}")
+                    solution = result.x.reshape((n_factories, n_outlets))
+                    cost = result.fun
+
+                    # Verify the solution
+                    self.verify_scipy_solution(
+                        solution, costs, capacities, demands)
+
+                    return solution, cost, True
+                else:
+                    print(
+                        f"   ✗ Failed with method: {method} - {result.message}")
+
+            except Exception as e:
+                print(f"   ✗ Exception with method: {method} - {str(e)}")
+                continue
+
+        # If all methods failed
+        print("   ✗ All SciPy methods failed")
+        return np.zeros((n_factories, n_outlets)), np.inf, False
+
+    def verify_scipy_solution(self, solution, costs, capacities, demands):
+        """Verify that SciPy solution satisfies all constraints"""
+        n_factories, n_outlets = solution.shape
+
+        print(f"   SciPy Solution Verification:")
+
+        # Check capacity constraints
+        for i in range(n_factories):
+            used = solution[i, :].sum()
+            print(f"     Factory {i+1}: {used:.2f}/{capacities[i]} capacity")
+            assert used <= capacities[i] + \
+                1e-6, f"Capacity exceeded for factory {i+1}"
+
+        # Check demand constraints
+        for j in range(n_outlets):
+            supplied = solution[:, j].sum()
+            print(f"     Outlet {j+1}: {supplied:.2f}/{demands[j]} demand")
+            assert abs(
+                supplied - demands[j]) <= 1e-6, f"Demand not met for outlet {j+1}"
+
+        # Check non-negativity
+        assert np.all(solution >= -1e-6), "Negative shipments found"
+
+        # Calculate and verify cost
+        total_cost = np.sum(solution * costs)
+        print(f"     Total cost: {total_cost:.4f}")
+
+    def compare_all_results(self, results, costs, capacities, demands):
+        """Compare results from all three methods"""
+        print("\n" + "="*80)
+        print("RESULTS COMPARISON")
+        print("="*80)
+
+        # Summary table
+        print(f"{'Method':<25} {'Cost':<12} {'Time(s)':<10} {'Success':<8}")
+        print("-" * 55)
+
+        for method_name, result in results.items():
+            print(
+                f"{method_name:<25} {result['cost']:<12.4f} {result['time']:<10.4f} {result['success']:<8}")
+
+        # Detailed comparison
+        successful_methods = {k: v for k, v in results.items() if v['success']}
+
+        if len(successful_methods) >= 2:
+            print(f"\nDETAILED COMPARISON (Successful methods only):")
+
+            methods = list(successful_methods.keys())
+            costs_list = [successful_methods[m]['cost'] for m in methods]
+
+            # Cost differences
+            print(f"\nCost Analysis:")
+            for i, method1 in enumerate(methods):
+                for j, method2 in enumerate(methods):
+                    if i < j:
+                        diff = abs(costs_list[i] - costs_list[j])
+                        print(
+                            f"  {method1} vs {method2}: difference = {diff:.6f}")
+
+            # Solution differences
+            print(f"\nSolution Analysis:")
+            base_method = methods[0]
+            base_solution = successful_methods[base_method]['solution']
+
+            for method in methods[1:]:
+                other_solution = successful_methods[method]['solution']
+                max_diff = np.max(np.abs(base_solution - other_solution))
+                rms_diff = np.sqrt(
+                    np.mean((base_solution - other_solution)**2))
+                print(f"  {base_method} vs {method}:")
+                print(f"    Max difference: {max_diff:.6f}")
+                print(f"    RMS difference: {rms_diff:.6f}")
+
+        # Create comprehensive comparison plot
+        self.plot_comprehensive_comparison(results, costs, capacities, demands)
+
+    def plot_comprehensive_comparison(self, results, costs, capacities, demands):
+        """Create comprehensive comparison plots"""
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig.suptitle('Comprehensive Method Comparison',
+                     fontsize=16, fontweight='bold')
+
+        successful_results = {k: v for k, v in results.items() if v['success']}
+        methods = list(successful_results.keys())
+        colors = ['blue', 'green', 'red', 'orange', 'purple']
+
+        # 1. Cost Comparison
+        ax = axes[0, 0]
+        costs_list = [successful_results[m]['cost'] for m in methods]
+        bars = ax.bar(methods, costs_list, color=colors[:len(methods)])
+        ax.set_title('Total Cost Comparison')
+        ax.set_ylabel('Cost ($)')
+        ax.tick_params(axis='x', rotation=45)
+
+        # Add value labels on bars
+        for bar, cost in zip(bars, costs_list):
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{height:.2f}',
-                    ha='center', va='bottom')
-        
-        plt.subplot(2, 2, 2)
-        bars = plt.bar(['Interior Point', 'Max-Flow'], [ip_time, mf_time], color=['red', 'orange'])
-        plt.title('Computation Time Comparison')
-        plt.ylabel('Time (seconds)')
-        for bar in bars:
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{cost:.2f}', ha='center', va='bottom')
+
+        # 2. Time Comparison
+        ax = axes[0, 1]
+        times_list = [successful_results[m]['time'] for m in methods]
+        bars = ax.bar(methods, times_list, color=colors[:len(methods)])
+        ax.set_title('Computation Time Comparison')
+        ax.set_ylabel('Time (seconds)')
+        ax.tick_params(axis='x', rotation=45)
+        ax.set_yscale('log')  # Log scale for time differences
+
+        # Add value labels
+        for bar, time_val in zip(bars, times_list):
             height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{height:.4f}',
-                    ha='center', va='bottom')
-        
-        # Solution difference heatmap
-        plt.subplot(2, 2, 3)
-        diff = ip_solution - mf_solution
-        plt.imshow(diff, cmap='coolwarm', interpolation='nearest')
-        plt.colorbar(label='Difference (IP - MF)')
-        plt.title("Solution Difference Heatmap")
-        plt.xlabel("Retail Outlet")
-        plt.ylabel("Factory")
-        plt.xticks(np.arange(12), np.arange(12)+1)
-        plt.yticks([0, 1], ['Factory 1', 'Factory 2'])
-        
-        # Solution values side by side
-        plt.subplot(2, 2, 4)
-        plt.plot(ip_solution.flatten(), 'bo', label='Interior Point', alpha=0.6)
-        plt.plot(mf_solution.flatten(), 'r+', label='Max-Flow', markersize=10)
-        plt.title("Solution Values Comparison")
-        plt.xlabel("Variable Index")
-        plt.ylabel("Shipping Amount")
-        plt.legend()
-        plt.grid(True)
-        
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{time_val:.4f}', ha='center', va='bottom')
+
+        # 3. Solution Heatmap (if multiple methods)
+        if len(methods) >= 2:
+            ax = axes[0, 2]
+            # Compare first two methods
+            diff = successful_results[methods[0]]['solution'] - \
+                successful_results[methods[1]]['solution']
+            im = ax.imshow(diff, cmap='coolwarm', interpolation='nearest')
+            ax.set_title(f'Solution Difference\n{methods[0]} - {methods[1]}')
+            ax.set_xlabel('Retail Outlet')
+            ax.set_ylabel('Factory')
+            ax.set_xticks(np.arange(12))
+            ax.set_xticklabels(np.arange(12)+1)
+            ax.set_yticks([0, 1])
+            ax.set_yticklabels(['Factory 1', 'Factory 2'])
+            plt.colorbar(im, ax=ax, label='Difference')
+
+        # 4. Factory Utilization Comparison
+        ax = axes[1, 0]
+        width = 0.8 / len(methods)
+        x = np.arange(2)  # Two factories
+
+        for i, method in enumerate(methods):
+            solution = successful_results[method]['solution']
+            utilization = [solution[j, :].sum() / capacities[j]
+                           * 100 for j in range(2)]
+            offset = (i - len(methods)/2 + 0.5) * width
+            ax.bar(x + offset, utilization, width,
+                   label=method, color=colors[i])
+
+        ax.set_title('Factory Capacity Utilization')
+        ax.set_ylabel('Utilization (%)')
+        ax.set_xlabel('Factory')
+        ax.set_xticks(x)
+        ax.set_xticklabels(['Factory 1', 'Factory 2'])
+        ax.legend()
+
+        # 5. Solution Values Scatter Plot
+        ax = axes[1, 1]
+        if len(methods) >= 2:
+            sol1 = successful_results[methods[0]]['solution'].flatten()
+            sol2 = successful_results[methods[1]]['solution'].flatten()
+            ax.scatter(sol1, sol2, alpha=0.6, color='blue')
+
+            # Add diagonal line for perfect correlation
+            min_val, max_val = min(np.min(sol1), np.min(
+                sol2)), max(np.max(sol1), np.max(sol2))
+            ax.plot([min_val, max_val], [min_val, max_val], 'r--', alpha=0.8)
+
+            ax.set_xlabel(f'{methods[0]} Solution')
+            ax.set_ylabel(f'{methods[1]} Solution')
+            ax.set_title('Solution Values Correlation')
+            ax.grid(True, alpha=0.3)
+
+        # 6. Method Characteristics Summary
+        ax = axes[1, 2]
+        ax.axis('off')
+
+        summary_text = "METHOD CHARACTERISTICS\n" + "="*25 + "\n\n"
+
+        for method, result in successful_results.items():
+            summary_text += f"{method}:\n"
+            summary_text += f"  Cost: ${result['cost']:.2f}\n"
+            summary_text += f"  Time: {result['time']:.4f}s\n"
+            summary_text += f"  Success: {result['success']}\n\n"
+
+        # Add algorithm characteristics
+        summary_text += "\nALGORITHM TYPES:\n" + "-"*15 + "\n"
+        summary_text += "Interior Point: Barrier Method\n"
+        summary_text += "NetworkX: Min-Cost Max Flow\n"
+        summary_text += "SciPy: Simplex/Interior Point\n"
+
+        ax.text(0.05, 0.95, summary_text, transform=ax.transAxes,
+                fontsize=10, verticalalignment='top', fontfamily='monospace',
+                bbox=dict(boxstyle="round,pad=0.5", facecolor='lightgray', alpha=0.8))
+
         plt.tight_layout()
-        plt.savefig('method_comparison.png', dpi=300)
+        plt.savefig('comprehensive_method_comparison.png',
+                    dpi=300, bbox_inches='tight')
         plt.close()
-        print("\nSaved comparison plot to 'method_comparison.png'")
+        print(
+            "\nSaved comprehensive comparison plot to 'comprehensive_method_comparison.png'")
 
-def solve_with_maxflow(costs, capacities, demands):
-    """Solve using max-flow min-cost with proper supply/demand balance"""
-    G = nx.DiGraph()
-    
-    total_supply = sum(capacities)
-    total_demand = sum(demands)
-    
-    # Add source and sink with balanced supply/demand
-    G.add_node('source', demand=-(total_supply - total_demand))
-    G.add_node('sink', demand=0)  # All demand handled through retail nodes
-    
-    # Add factory nodes with their actual capacities
-    for i in range(len(capacities)):
-        G.add_node(f'F{i+1}')
-        G.add_edge('source', f'F{i+1}', capacity=capacities[i], weight=0)
-    
-    # Add retail nodes with their actual demands
-    for j in range(len(demands)):
-        G.add_node(f'R{j+1}')
-        G.add_edge(f'R{j+1}', 'sink', capacity=demands[j], weight=0)
-    
-    # Add factory-retail edges with infinite capacity (or large enough)
-    for i in range(len(capacities)):
-        for j in range(len(demands)):
-            G.add_edge(f'F{i+1}', f'R{j+1}', 
-                      capacity=min(capacities[i], demands[j])*100,  # Large capacity
-                      weight=costs[i,j])
-    
-    try:
-        # Solve min-cost flow
-        flow_dict = nx.min_cost_flow(G)
-        
-        # Extract solution
-        solution = np.zeros_like(costs)
-        for i in range(len(capacities)):
-            for j in range(len(demands)):
-                solution[i,j] = flow_dict[f'F{i+1}'].get(f'R{j+1}', 0)
-        
-        total_cost = (solution * costs).sum()
-        
-        return solution, total_cost, 0  # 0 is placeholder for time
-        
-    except nx.NetworkXUnfeasible:
-        print("Warning: Max-flow problem is infeasible. Trying alternative formulation...")
-        return solve_with_maxflow_alternative(costs, capacities, demands)
+    def test_compare_methods(self):
+        """Legacy test method - now calls the comprehensive comparison"""
+        self.test_compare_all_methods()
 
-def solve_with_maxflow_alternative(costs, capacities, demands):
-    """Alternative formulation when exact balance isn't possible"""
-    G = nx.DiGraph()
-    
-    # Add source and sink
-    G.add_node('source')
-    G.add_node('sink')
-    
-    # Add factories with edges from source
-    for i, cap in enumerate(capacities):
-        G.add_node(f'F{i+1}')
-        G.add_edge('source', f'F{i+1}', capacity=cap, weight=0)
-    
-    # Add retailers with edges to sink
-    for j, dem in enumerate(demands):
-        G.add_node(f'R{j+1}')
-        G.add_edge(f'R{j+1}', 'sink', capacity=dem, weight=0)
-    
-    # Add factory-retail edges
-    for i in range(len(capacities)):
-        for j in range(len(demands)):
-            G.add_edge(f'F{i+1}', f'R{j+1}', 
-                      capacity=min(capacities[i], demands[j]),
-                      weight=costs[i,j])
-    
-    # Solve as maximum flow with minimum cost
-    flow_value, flow_dict = nx.maximum_flow(G, 'source', 'sink')
-    min_cost = 0
-    solution = np.zeros_like(costs)
-    
-    for i in range(len(capacities)):
-        for j in range(len(demands)):
-            flow = flow_dict[f'F{i+1}'].get(f'R{j+1}', 0)
-            solution[i,j] = flow
-            min_cost += flow * costs[i,j]
-    
-    return solution, min_cost, 0
 
 def solve_with_maxflow_balanced(costs, capacities, demands):
     """Max-flow formulation that correctly calculates costs"""
     G = nx.DiGraph()
-    
+
     # Add nodes
     G.add_node('source', demand=-sum(demands))
     G.add_node('sink', demand=sum(demands))
-    
+
     # Add factory nodes
     for i, cap in enumerate(capacities):
         G.add_node(f'F{i+1}')
         # Connect source to factories with available capacity
         G.add_edge('source', f'F{i+1}', capacity=cap, weight=0)
-    
+
     # Add retail nodes
     for j, dem in enumerate(demands):
         G.add_node(f'R{j+1}')
         # Connect retailers to sink with demand as capacity
         G.add_edge(f'R{j+1}', 'sink', capacity=dem, weight=0)
-    
+
     # Add factory-retail edges with costs
     for i in range(len(capacities)):
         for j in range(len(demands)):
             # Set capacity to min of factory capacity and outlet demand
             edge_capacity = min(capacities[i], demands[j])
-            G.add_edge(f'F{i+1}', f'R{j+1}', 
-                      capacity=edge_capacity,
-                      weight=costs[i,j])  # This is crucial for cost calculation
-    
+            G.add_edge(f'F{i+1}', f'R{j+1}',
+                       capacity=edge_capacity,
+                       # This is crucial for cost calculation
+                       weight=costs[i, j])
+
     # Solve min cost flow
     flow_dict = nx.min_cost_flow(G)
-    
+
     # Extract solution and compute cost
     solution = np.zeros_like(costs)
     total_cost = 0
-    
+
     for i in range(len(capacities)):
         factory_node = f'F{i+1}'
         for j in range(len(demands)):
             retail_node = f'R{j+1}'
             flow = flow_dict[factory_node].get(retail_node, 0)
-            solution[i,j] = flow
-            total_cost += flow * costs[i,j]
-    
+            solution[i, j] = flow
+            total_cost += flow * costs[i, j]
+
     # Verification
-    print("\nMax-Flow Verification:")
+    print("NetworkX Min-Cost Flow Verification:")
     print("Total shipped from F1:", solution[0].sum())
     print("Total shipped from F2:", solution[1].sum())
     print("Total received by outlets:", solution.sum(axis=0))
     print("Actual demands:", demands)
-    print("Flow costs:", solution * costs)
     print("Total calculated cost:", total_cost)
-    
+
     return solution, total_cost, 0
+
+
 if __name__ == "__main__":
     unittest.main()
