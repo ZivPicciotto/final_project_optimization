@@ -70,3 +70,17 @@ class LPConstraint(MathFunction):
 
     def hessian(self, x):
         return np.zeros((len(x), len(x)))
+
+class TransportationObjective(MathFunction):
+            def __init__(self, cost_matrix):
+                self.c = cost_matrix.ravel()
+                self.n = len(self.c)
+                
+            def value(self, x):
+                return np.dot(self.c, x)
+                
+            def gradient(self, x):
+                return self.c
+                
+            def hessian(self, x):
+                return np.zeros((self.n, self.n))
