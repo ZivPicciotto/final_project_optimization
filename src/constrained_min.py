@@ -1,5 +1,5 @@
 import numpy as np
-from test.examples import MathFunction
+from test.test_utils import MathFunction
 from .utils import BarrierFunction
 
 # --------------------------- GLOBAL CONSTANTS --------------------------------

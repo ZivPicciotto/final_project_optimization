@@ -1,5 +1,5 @@
 import numpy as np
-from test.examples import MathFunction
+from test.test_utils import MathFunction
 import matplotlib.pyplot as plt
 
 
@@ -9,7 +9,6 @@ class BarrierFunction(MathFunction):
         self.ineq_constraints = ineq_constraints
         self.t = t
 
-    # In utils.py, modify BarrierFunction methods:
     def value(self, x):
         constraint_vals = [-c.value(x) for c in self.ineq_constraints]
         min_val = min(constraint_vals)

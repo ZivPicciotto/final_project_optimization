@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import linprog
 from src.constrained_min import InteriorPoint
-from examples import LPConstraint, TransportationObjective
+from test.test_utils import LPConstraint, TransportationObjective
 from src.utils import plot_cost_breakdown, plot_flow_network, plot_utilization
 import networkx as nx
 from time import time
@@ -92,7 +92,6 @@ class TestConstrainedMin(unittest.TestCase):
             x0,
         )
 
-        # Adjust solver parameters for better stability
         global MU, T0, INNER_EPSILON, OUTER_EPSILON
         MU = 5.0  # Smaller multiplicative factor
         T0 = 0.1  # Smaller initial t value
