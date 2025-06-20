@@ -237,8 +237,8 @@ class TestConstrainedMin(unittest.TestCase):
 
         for j in range(n_outlets):
             constraint_row = np.zeros(total_vars)
-            constraint_row[j] = 1  # From factory 1
-            constraint_row[j + n_outlets] = 1  # From factory 2
+            constraint_row[j] = 1
+            constraint_row[j + n_outlets] = 1
             A_eq.append(constraint_row)
             b_eq.append(demands[j])
 
@@ -352,7 +352,7 @@ class TestConstrainedMin(unittest.TestCase):
 
     def plot_comprehensive_comparison(self, results, costs, capacities, demands):
         """Create comprehensive comparison plots"""
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig, axes = plt.subplots(1, 3, figsize=(18, 8))
         fig.suptitle('Comprehensive Method Comparison',
                      fontsize=16, fontweight='bold')
 
@@ -361,7 +361,7 @@ class TestConstrainedMin(unittest.TestCase):
         colors = ['blue', 'green', 'red', 'orange', 'purple']
 
         # Time Comparison
-        ax = axes[0, 0]
+        ax = axes[0]
         times_list = [successful_results[m]['time'] for m in methods]
         bars = ax.bar(methods, times_list, color=colors[:len(methods)])
         ax.set_title('Computation Time Comparison')
@@ -375,7 +375,7 @@ class TestConstrainedMin(unittest.TestCase):
                     f'{time_val:.4f}', ha='center', va='bottom')
 
         # Factory Utilization Comparison
-        ax = axes[0, 1]
+        ax = axes[1]
         width = 0.8 / len(methods)
         x = np.arange(2)
 
@@ -395,7 +395,7 @@ class TestConstrainedMin(unittest.TestCase):
         ax.legend()
 
         # Variable Index vs Shipping Amount
-        ax = axes[1, 0]
+        ax = axes[2]
         if len(methods) >= 1:
             variable_indices = np.arange(24)
             for i, method in enumerate(methods):
@@ -413,33 +413,13 @@ class TestConstrainedMin(unittest.TestCase):
             ax.set_ylabel('Shipping Amount (Units)')
             ax.set_title('Shipping Amounts by Variable Index')
             ax.grid(True, alpha=0.3)
-            ax.legend()
+            ax.legend(loc='upper right')
 
             ax.axvline(x=11.5, color='gray', linestyle='--', alpha=0.5)
             ax.text(5.5, ax.get_ylim()[
-                    1]*0.9, 'Factory 1', ha='center', fontweight='bold')
+                1]*0.9, 'Factory 1', ha='center', fontweight='bold')
             ax.text(17.5, ax.get_ylim()[
-                    1]*0.9, 'Factory 2', ha='center', fontweight='bold')
-
-        # Method Characteristics Summary
-        ax = axes[1, 1]
-        ax.axis('off')
-        summary_text = "METHOD CHARACTERISTICS\n" + "="*25 + "\n\n"
-
-        for method, result in successful_results.items():
-            summary_text += f"{method}:\n"
-            summary_text += f"  Cost: ${result['cost']:.2f}\n"
-            summary_text += f"  Time: {result['time']:.4f}s\n"
-            summary_text += f"  Success: {result['success']}\n\n"
-
-        summary_text += "\nALGORITHM TYPES:\n" + "-"*15 + "\n"
-        summary_text += "Interior Point: Barrier Method\n"
-        summary_text += "NetworkX: Min-Cost Max Flow\n"
-        summary_text += "SciPy: Simplex/Interior Point\n"
-
-        ax.text(0.05, 0.95, summary_text, transform=ax.transAxes,
-                fontsize=10, verticalalignment='top', fontfamily='monospace',
-                bbox=dict(boxstyle="round,pad=0.5", facecolor='lightgray', alpha=0.8))
+                1]*0.9, 'Factory 2', ha='center', fontweight='bold')
 
         plt.tight_layout()
         plt.savefig('comprehensive_method_comparison.png',
@@ -447,10 +427,6 @@ class TestConstrainedMin(unittest.TestCase):
         plt.close()
         print(
             "\nSaved comprehensive comparison plot to 'comprehensive_method_comparison.png'")
-
-    def test_compare_methods(self):
-        """Legacy test method - now calls the comprehensive comparison"""
-        self.test_compare_all_methods()
 
 
 def solve_with_maxflow_balanced(costs, capacities, demands):
