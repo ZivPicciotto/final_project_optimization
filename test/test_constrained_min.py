@@ -312,13 +312,6 @@ class TestConstrainedMin(unittest.TestCase):
         print("RESULTS COMPARISON")
         print("="*80)
 
-        print(f"{'Method':<25} {'Cost':<12} {'Time(s)':<10} {'Success':<8}")
-        print("-" * 55)
-
-        for method_name, result in results.items():
-            print(
-                f"{method_name:<25} {result['cost']:<12.4f} {result['time']:<10.4f} {result['success']:<8}")
-
         successful_methods = {k: v for k, v in results.items() if v['success']}
 
         if len(successful_methods) >= 2:
